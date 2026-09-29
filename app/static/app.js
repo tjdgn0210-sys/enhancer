@@ -13,6 +13,9 @@ const imageDimensions = document.querySelector("#image-dimensions");
 const result = document.querySelector("#result");
 const resultImage = document.querySelector("#result-image");
 const downloadResult = document.querySelector("#download-result");
+const textOverlay = document.querySelector("#text-overlay");
+const textCount = document.querySelector("#text-count");
+const textList = document.querySelector("#text-list");
 const maxFileSize = 20 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 let previewUrl = null;
@@ -24,6 +27,61 @@ function clearResult() {
   resultImage.removeAttribute("src");
   downloadResult.removeAttribute("href");
   result.hidden = true;
+}
+
+function clearTextRegions() {
+  textOverlay.replaceChildren();
+  textOverlay.removeAttribute("viewBox");
+  textCount.textContent = "";
+  textCount.hidden = true;
+  textList.replaceChildren();
+  textList.hidden = true;
+}
+
+function showTextRegions(regions, width, height, maskPreview) {
+  clearTextRegions();
+  textOverlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (maskPreview) {
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+    mask.id = "removal-mask";
+    mask.setAttribute("maskUnits", "userSpaceOnUse");
+    mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+    mask.setAttribute("mask-type", "luminance");
+    mask.setAttribute("x", "0");
+    mask.setAttribute("y", "0");
+    mask.setAttribute("width", width);
+    mask.setAttribute("height", height);
+    const maskImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
+    maskImage.setAttribute("href", `data:image/png;base64,${maskPreview}`);
+    maskImage.setAttribute("width", width);
+    maskImage.setAttribute("height", height);
+    maskImage.setAttribute("preserveAspectRatio", "none");
+    mask.append(maskImage);
+    defs.append(mask);
+    textOverlay.append(defs);
+
+    const highlightedMask = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    highlightedMask.setAttribute("width", width);
+    highlightedMask.setAttribute("height", height);
+    highlightedMask.setAttribute("fill", "#ef4444");
+    highlightedMask.setAttribute("fill-opacity", "0.38");
+    highlightedMask.setAttribute("mask", "url(#removal-mask)");
+    textOverlay.append(highlightedMask);
+  }
+  for (const region of regions) {
+    const polygon = document.createElementNS("http://www.w3.org/2000/svg", "polygon");
+    polygon.setAttribute("points", region.polygon.map((point) => point.join(",")).join(" "));
+    polygon.classList.add("text-region");
+    textOverlay.append(polygon);
+
+    const item = document.createElement("li");
+    item.textContent = `${region.text} (${(region.confidence * 100).toFixed(0)}%)`;
+    textList.append(item);
+  }
+  textCount.textContent = `Detected text: ${regions.length}`;
+  textCount.hidden = false;
+  textList.hidden = regions.length === 0;
 }
 
 function clearPreview() {
@@ -38,6 +96,7 @@ function clearPreview() {
 
 imageInput.addEventListener("change", () => {
   clearPreview();
+  clearTextRegions();
   uploadMessage.textContent = "";
   status.textContent = "";
   const image = imageInput.files[0];
@@ -95,6 +154,7 @@ form.addEventListener("submit", async (event) => {
 
   const processButton = form.querySelector('button[type="submit"]');
   clearResult();
+  clearTextRegions();
   const data = new FormData();
   data.append("image", image);
   data.append("mode", mode.value.replace("-", "_"));
@@ -110,7 +170,11 @@ form.addEventListener("submit", async (event) => {
       const error = await response.json();
       throw new Error(error.detail || "Image processing failed.");
     }
-    if (response.headers.get("content-type")?.startsWith("image/")) {
+    if (mode.value === "clean-enhance") {
+      const data = await response.json();
+      showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
+      status.textContent = data.message || `Detected ${(data.text_regions || []).length} text regions.`;
+    } else if (response.headers.get("content-type")?.startsWith("image/")) {
       const output = await response.blob();
       resultUrl = URL.createObjectURL(output);
       resultImage.src = resultUrl;
@@ -131,6 +195,7 @@ form.addEventListener("submit", async (event) => {
 document.querySelector("#reset").addEventListener("click", () => {
   form.reset();
   clearPreview();
+  clearTextRegions();
   clearResult();
   uploadMessage.textContent = "";
   status.textContent = "";

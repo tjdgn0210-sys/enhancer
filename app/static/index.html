@@ -15,7 +15,12 @@
       <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
       <p id="upload-message" role="alert" aria-live="polite"></p>
       <section id="preview" aria-label="Image preview" hidden>
-        <img id="preview-image" alt="Selected image preview">
+        <div class="preview-stage">
+          <img id="preview-image" alt="Selected image preview">
+          <svg id="text-overlay" aria-hidden="true" preserveAspectRatio="none"></svg>
+        </div>
+        <p id="text-count" hidden></p>
+        <ul id="text-list" hidden></ul>
         <dl>
           <dt>Filename</dt><dd id="image-name"></dd>
           <dt>File size</dt><dd id="image-size"></dd>

@@ -1,13 +1,16 @@
 from pathlib import Path
 from typing import Annotated
+import base64
+from io import BytesIO
+import logging
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel
-from io import BytesIO
 from app.services.enhancer import EnhancementError, enhance_image
+from app.services.ocr import OcrEngineError, detect_text_regions, generate_removal_mask
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -15,6 +18,7 @@ MAX_FILE_SIZE = 20 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
 
 app = FastAPI(title="Enhancer")
+logger = logging.getLogger(__name__)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
 
 
@@ -28,6 +32,12 @@ def index() -> FileResponse:
     return FileResponse(BASE_DIR / "static" / "index.html")
 
 
+class TextRegion(BaseModel):
+    text: str
+    confidence: float
+    polygon: list[list[float]]
+
+
 class ProcessResponse(BaseModel):
     success: bool
     filename: str
@@ -37,6 +47,11 @@ class ProcessResponse(BaseModel):
     cleanup_level: int | None
     enhancement_level: int
     message: str
+    text_regions: list[TextRegion] | None = None
+    text_region_count: int | None = None
+    mask_width: int | None = None
+    mask_height: int | None = None
+    mask_preview: str | None = None
 
 
 @app.post("/api/process", response_model=None)
@@ -72,15 +87,26 @@ async def validate_process_request(
         await image.close()
 
     if mode == "clean_enhance":
+        try:
+            text_regions = detect_text_regions(contents, cleanup_level)
+            mask_png = generate_removal_mask(width, height, text_regions, cleanup_level)
+        except OcrEngineError as error:
+            logger.error("OCR request failed: %s", error)
+            raise HTTPException(status_code=503, detail=str(error)) from None
         return ProcessResponse(
-            success=False,
+            success=True,
             filename=image.filename or "image",
             width=width,
             height=height,
             mode=mode,
             cleanup_level=cleanup_level,
             enhancement_level=enhancement_level,
-            message="Clean + Enhance is not implemented yet.",
+            message=f"Detected {len(text_regions)} text regions.",
+            text_regions=text_regions,
+            text_region_count=len(text_regions),
+            mask_width=width,
+            mask_height=height,
+            mask_preview=base64.b64encode(mask_png).decode("ascii"),
         )
 
     try:
