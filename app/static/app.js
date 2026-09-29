@@ -13,6 +13,7 @@ const imageDimensions = document.querySelector("#image-dimensions");
 const result = document.querySelector("#result");
 const resultImage = document.querySelector("#result-image");
 const downloadResult = document.querySelector("#download-result");
+const resultHeading = result.querySelector("h2");
 const textOverlay = document.querySelector("#text-overlay");
 const textCount = document.querySelector("#text-count");
 const textList = document.querySelector("#text-list");
@@ -26,7 +27,18 @@ function clearResult() {
   resultUrl = null;
   resultImage.removeAttribute("src");
   downloadResult.removeAttribute("href");
+  downloadResult.download = "enhanced-image.png";
+  resultHeading.textContent = "Enhanced image";
   result.hidden = true;
+}
+
+function showImageResult(imageBlob, filename, heading) {
+  resultUrl = URL.createObjectURL(imageBlob);
+  resultImage.src = resultUrl;
+  downloadResult.href = resultUrl;
+  downloadResult.download = filename;
+  resultHeading.textContent = heading;
+  result.hidden = false;
 }
 
 function clearTextRegions() {
@@ -173,13 +185,12 @@ form.addEventListener("submit", async (event) => {
     if (mode.value === "clean-enhance") {
       const data = await response.json();
       showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
-      status.textContent = data.message || `Detected ${(data.text_regions || []).length} text regions.`;
+      const imageBytes = Uint8Array.from(atob(data.cleaned_image), (character) => character.charCodeAt(0));
+      showImageResult(new Blob([imageBytes], { type: "image/png" }), "cleaned-image.png", "Cleaned image");
+      status.textContent = `${data.message} (${data.width} × ${data.height})`;
     } else if (response.headers.get("content-type")?.startsWith("image/")) {
       const output = await response.blob();
-      resultUrl = URL.createObjectURL(output);
-      resultImage.src = resultUrl;
-      downloadResult.href = resultUrl;
-      result.hidden = false;
+      showImageResult(output, "enhanced-image.png", "Enhanced image");
       status.textContent = `Enhanced image ready (${response.headers.get("X-Image-Width")} × ${response.headers.get("X-Image-Height")}).`;
     } else {
       const message = await response.json();

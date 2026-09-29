@@ -10,6 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from PIL import Image, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel
 from app.services.enhancer import EnhancementError, enhance_image
+from app.services.inpainter import InpainterError, inpaint_image
 from app.services.ocr import OcrEngineError, detect_text_regions, generate_removal_mask
 
 
@@ -52,6 +53,7 @@ class ProcessResponse(BaseModel):
     mask_width: int | None = None
     mask_height: int | None = None
     mask_preview: str | None = None
+    cleaned_image: str | None = None
 
 
 @app.post("/api/process", response_model=None)
@@ -93,6 +95,20 @@ async def validate_process_request(
         except OcrEngineError as error:
             logger.error("OCR request failed: %s", error)
             raise HTTPException(status_code=503, detail=str(error)) from None
+        with Image.open(BytesIO(contents)) as uploaded_image:
+            clean_source = ImageOps.exif_transpose(uploaded_image).convert("RGB")
+        if text_regions:
+            try:
+                cleaned = inpaint_image(clean_source, mask_png, cleanup_level)
+            except InpainterError as error:
+                logger.error("LaMa request failed: %s", error)
+                raise HTTPException(status_code=503, detail=str(error)) from None
+            message = f"Cleaned {len(text_regions)} text regions."
+        else:
+            cleaned = clean_source
+            message = "No text found. Original image returned."
+        cleaned_png = BytesIO()
+        cleaned.save(cleaned_png, format="PNG")
         return ProcessResponse(
             success=True,
             filename=image.filename or "image",
@@ -101,12 +117,13 @@ async def validate_process_request(
             mode=mode,
             cleanup_level=cleanup_level,
             enhancement_level=enhancement_level,
-            message=f"Detected {len(text_regions)} text regions.",
+            message=message,
             text_regions=text_regions,
             text_region_count=len(text_regions),
             mask_width=width,
             mask_height=height,
             mask_preview=base64.b64encode(mask_png).decode("ascii"),
+            cleaned_image=base64.b64encode(cleaned_png.getvalue()).decode("ascii"),
         )
 
     try:
