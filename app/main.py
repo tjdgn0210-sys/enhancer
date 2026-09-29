@@ -54,6 +54,9 @@ class ProcessResponse(BaseModel):
     mask_height: int | None = None
     mask_preview: str | None = None
     cleaned_image: str | None = None
+    enhanced_image: str | None = None
+    enhanced_width: int | None = None
+    enhanced_height: int | None = None
 
 
 @app.post("/api/process", response_model=None)
@@ -109,6 +112,14 @@ async def validate_process_request(
             message = "No text found. Original image returned."
         cleaned_png = BytesIO()
         cleaned.save(cleaned_png, format="PNG")
+        try:
+            enhanced_png, enhanced_width, enhanced_height = enhance_image(
+                cleaned_png.getvalue(), enhancement_level
+            )
+        except EnhancementError as error:
+            logger.error("Real-ESRGAN request failed after cleanup: %s", error)
+            raise HTTPException(status_code=503, detail=str(error)) from None
+
         return ProcessResponse(
             success=True,
             filename=image.filename or "image",
@@ -117,13 +128,16 @@ async def validate_process_request(
             mode=mode,
             cleanup_level=cleanup_level,
             enhancement_level=enhancement_level,
-            message=message,
+            message=f"{message} Enhanced image ready.",
             text_regions=text_regions,
             text_region_count=len(text_regions),
             mask_width=width,
             mask_height=height,
             mask_preview=base64.b64encode(mask_png).decode("ascii"),
             cleaned_image=base64.b64encode(cleaned_png.getvalue()).decode("ascii"),
+            enhanced_image=base64.b64encode(enhanced_png).decode("ascii"),
+            enhanced_width=enhanced_width,
+            enhanced_height=enhanced_height,
         )
 
     try:

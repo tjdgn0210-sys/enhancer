@@ -11,6 +11,8 @@ const imageName = document.querySelector("#image-name");
 const imageSize = document.querySelector("#image-size");
 const imageDimensions = document.querySelector("#image-dimensions");
 const result = document.querySelector("#result");
+const cleanedResult = document.querySelector("#cleaned-result");
+const cleanedResultImage = document.querySelector("#cleaned-result-image");
 const resultImage = document.querySelector("#result-image");
 const downloadResult = document.querySelector("#download-result");
 const resultHeading = result.querySelector("h2");
@@ -21,15 +23,27 @@ const maxFileSize = 20 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 let previewUrl = null;
 let resultUrl = null;
+let cleanedResultUrl = null;
 
 function clearResult() {
   if (resultUrl) URL.revokeObjectURL(resultUrl);
+  if (cleanedResultUrl) URL.revokeObjectURL(cleanedResultUrl);
   resultUrl = null;
+  cleanedResultUrl = null;
+  cleanedResultImage.removeAttribute("src");
+  cleanedResult.hidden = true;
   resultImage.removeAttribute("src");
   downloadResult.removeAttribute("href");
   downloadResult.download = "enhanced-image.png";
   resultHeading.textContent = "Enhanced image";
   result.hidden = true;
+}
+
+function showCleanedResult(encodedImage) {
+  const bytes = Uint8Array.from(atob(encodedImage), (character) => character.charCodeAt(0));
+  cleanedResultUrl = URL.createObjectURL(new Blob([bytes], { type: "image/png" }));
+  cleanedResultImage.src = cleanedResultUrl;
+  cleanedResult.hidden = false;
 }
 
 function showImageResult(imageBlob, filename, heading) {
@@ -185,9 +199,14 @@ form.addEventListener("submit", async (event) => {
     if (mode.value === "clean-enhance") {
       const data = await response.json();
       showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
-      const imageBytes = Uint8Array.from(atob(data.cleaned_image), (character) => character.charCodeAt(0));
-      showImageResult(new Blob([imageBytes], { type: "image/png" }), "cleaned-image.png", "Cleaned image");
-      status.textContent = `${data.message} (${data.width} × ${data.height})`;
+      showCleanedResult(data.cleaned_image);
+      const enhancedBytes = Uint8Array.from(atob(data.enhanced_image), (character) => character.charCodeAt(0));
+      showImageResult(
+        new Blob([enhancedBytes], { type: "image/png" }),
+        "cleaned-enhanced-image.png",
+        "Final enhanced image",
+      );
+      status.textContent = `${data.message} (${data.enhanced_width} × ${data.enhanced_height})`;
     } else if (response.headers.get("content-type")?.startsWith("image/")) {
       const output = await response.blob();
       showImageResult(output, "enhanced-image.png", "Enhanced image");

@@ -52,9 +52,13 @@
     </form>
     <p id="status" role="status" aria-live="polite"></p>
     <section id="result" aria-label="Enhanced image result" hidden>
+      <div id="cleaned-result" hidden>
+        <h3>Cleaned image</h3>
+        <img id="cleaned-result-image" alt="Cleaned image before enhancement">
+      </div>
       <h2>Enhanced image</h2>
       <img id="result-image" alt="Enhanced result">
-      <a id="download-result" download="enhanced-image.png">Download result</a>
+      <a id="download-result" download="enhanced-image.png">Download final enhanced image</a>
     </section>
   </main>
 </body>

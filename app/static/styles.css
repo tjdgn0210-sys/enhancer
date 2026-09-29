@@ -19,3 +19,5 @@ button { margin-top: 0.5rem; border: 0; border-radius: 0.4rem; color: white; bac
 #preview dl { display: grid; grid-template-columns: 7rem 1fr; gap: 0.35rem 0.75rem; margin: 0.75rem 0 0; overflow-wrap: anywhere; }
 #preview dt { font-weight: 600; }
 #preview dd { margin: 0; }
+#result img { display: block; max-width: 100%; height: auto; }
+#cleaned-result { margin-bottom: 1rem; }
