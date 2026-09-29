@@ -1,6 +1,8 @@
 from pathlib import Path
 from typing import Annotated
 import base64
+import json
+import math
 from io import BytesIO
 import logging
 
@@ -57,6 +59,7 @@ class ProcessResponse(BaseModel):
     enhanced_image: str | None = None
     enhanced_width: int | None = None
     enhanced_height: int | None = None
+    extra_points: list[dict[str, int]] | None = None
 
 
 @app.post("/api/process", response_model=None)
@@ -65,6 +68,7 @@ async def validate_process_request(
     mode: Annotated[str, Form()],
     enhancement_level: Annotated[int, Form()],
     cleanup_level: Annotated[int | None, Form()] = None,
+    extra_points: Annotated[str | None, Form()] = None,
 ) -> ProcessResponse | Response:
     if image.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(status_code=415, detail="Choose a JPG, PNG, or WebP image.")
@@ -90,6 +94,30 @@ async def validate_process_request(
         raise HTTPException(status_code=400, detail="The uploaded file is not a valid image.") from None
     finally:
         await image.close()
+
+    validated_points: list[dict[str, int]] = []
+    if mode == "clean_enhance":
+        try:
+            points = json.loads(extra_points) if extra_points is not None else []
+        except (json.JSONDecodeError, TypeError):
+            raise HTTPException(status_code=400, detail="Extra points must be valid JSON.") from None
+        if not isinstance(points, list):
+            raise HTTPException(status_code=400, detail="Extra points must be a list.")
+        if len(points) > 20:
+            raise HTTPException(status_code=400, detail="A maximum of 20 extra points is allowed.")
+        for point in points:
+            if not isinstance(point, dict) or "x" not in point or "y" not in point:
+                raise HTTPException(status_code=400, detail="Each extra point must contain numeric x and y coordinates.")
+            x, y = point["x"], point["y"]
+            if (isinstance(x, bool) or isinstance(y, bool)
+                    or not isinstance(x, (int, float)) or not isinstance(y, (int, float))
+                    or (isinstance(x, float) and not math.isfinite(x))
+                    or (isinstance(y, float) and not math.isfinite(y))):
+                raise HTTPException(status_code=400, detail="Each extra point must contain numeric x and y coordinates.")
+            x, y = int(x), int(y)
+            if x < 0 or y < 0 or x >= width or y >= height:
+                raise HTTPException(status_code=400, detail="Extra point coordinates must be inside the uploaded image.")
+            validated_points.append({"x": x, "y": y})
 
     if mode == "clean_enhance":
         try:
@@ -138,6 +166,7 @@ async def validate_process_request(
             enhanced_image=base64.b64encode(enhanced_png).decode("ascii"),
             enhanced_width=enhanced_width,
             enhanced_height=enhanced_height,
+            extra_points=validated_points,
         )
 
     try:

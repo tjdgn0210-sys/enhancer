@@ -28,6 +28,15 @@
         </dl>
       </section>
 
+      <div id="extra-point-controls">
+        <label><input id="select-extra-points" type="checkbox"> Select extra UI to remove</label>
+        <div id="extra-point-actions" hidden>
+          <button id="undo-point" type="button" disabled>Undo last point</button>
+          <button id="clear-points" type="button" disabled>Clear points</button>
+          <p id="point-status" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+
       <label for="mode">Mode</label>
       <select id="mode" name="mode">
         <option value="clean-enhance">Clean + Enhance</option>

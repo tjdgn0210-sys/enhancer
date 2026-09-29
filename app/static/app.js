@@ -19,11 +19,18 @@ const resultHeading = result.querySelector("h2");
 const textOverlay = document.querySelector("#text-overlay");
 const textCount = document.querySelector("#text-count");
 const textList = document.querySelector("#text-list");
+const selectExtraPoints = document.querySelector("#select-extra-points");
+const extraPointControls = document.querySelector("#extra-point-controls");
+const extraPointActions = document.querySelector("#extra-point-actions");
+const undoPoint = document.querySelector("#undo-point");
+const clearPointsButton = document.querySelector("#clear-points");
+const pointStatus = document.querySelector("#point-status");
 const maxFileSize = 20 * 1024 * 1024;
 const allowedTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
 let previewUrl = null;
 let resultUrl = null;
 let cleanedResultUrl = null;
+let extraPoints = [];
 
 function clearResult() {
   if (resultUrl) URL.revokeObjectURL(resultUrl);
@@ -62,6 +69,36 @@ function clearTextRegions() {
   textCount.hidden = true;
   textList.replaceChildren();
   textList.hidden = true;
+}
+
+function drawExtraPoints() {
+  textOverlay.querySelectorAll(".extra-point-marker").forEach((marker) => marker.remove());
+  if (previewImage.naturalWidth && previewImage.getBoundingClientRect().width) {
+    for (const [index, point] of extraPoints.entries()) {
+      const scale = previewImage.naturalWidth / previewImage.getBoundingClientRect().width;
+      const circle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      circle.setAttribute("cx", point.x);
+      circle.setAttribute("cy", point.y);
+      circle.setAttribute("r", String(11 * scale));
+      circle.classList.add("extra-point-marker");
+      textOverlay.append(circle);
+      const label = document.createElementNS("http://www.w3.org/2000/svg", "text");
+      label.setAttribute("x", point.x);
+      label.setAttribute("y", point.y);
+      label.setAttribute("font-size", String(11 * scale));
+      label.textContent = String(index + 1);
+      label.classList.add("extra-point-number");
+      textOverlay.append(label);
+    }
+  }
+  undoPoint.disabled = extraPoints.length === 0;
+  clearPointsButton.disabled = extraPoints.length === 0;
+  pointStatus.textContent = extraPoints.length ? "Selected UI points are ready for segmentation." : "";
+}
+
+function clearExtraPoints() {
+  extraPoints = [];
+  drawExtraPoints();
 }
 
 function showTextRegions(regions, width, height, maskPreview) {
@@ -118,6 +155,7 @@ function clearPreview() {
   imageName.textContent = "";
   imageSize.textContent = "";
   imageDimensions.textContent = "";
+  clearExtraPoints();
 }
 
 imageInput.addEventListener("change", () => {
@@ -147,6 +185,7 @@ imageInput.addEventListener("change", () => {
     imageSize.textContent = `${(image.size / (1024 * 1024)).toFixed(2)} MB`;
     imageDimensions.textContent = `${previewImage.naturalWidth} × ${previewImage.naturalHeight}`;
     preview.hidden = false;
+    drawExtraPoints();
   };
   previewImage.onerror = () => {
     clearPreview();
@@ -160,10 +199,35 @@ function updateCleanupAvailability() {
   const enabled = mode.value === "clean-enhance";
   cleanupGroup.hidden = !enabled;
   cleanupLevel.disabled = !enabled;
+  extraPointControls.hidden = !enabled;
+  extraPointActions.hidden = !enabled || !selectExtraPoints.checked;
 }
 
 mode.addEventListener("change", updateCleanupAvailability);
 updateCleanupAvailability();
+
+previewImage.addEventListener("click", (event) => {
+  if (!selectExtraPoints.checked || mode.value !== "clean-enhance" || extraPoints.length >= 20) return;
+  const rect = previewImage.getBoundingClientRect();
+  const displayX = event.clientX - rect.left;
+  const displayY = event.clientY - rect.top;
+  if (displayX < 0 || displayY < 0 || displayX >= rect.width || displayY >= rect.height) return;
+  const point = {
+    x: Math.min(previewImage.naturalWidth - 1, Math.floor(displayX * previewImage.naturalWidth / rect.width)),
+    y: Math.min(previewImage.naturalHeight - 1, Math.floor(displayY * previewImage.naturalHeight / rect.height)),
+  };
+  if (extraPoints.some((existing) => existing.x === point.x && existing.y === point.y)) return;
+  extraPoints.push(point);
+  drawExtraPoints();
+});
+
+selectExtraPoints.addEventListener("change", updateCleanupAvailability);
+undoPoint.addEventListener("click", () => {
+  extraPoints.pop();
+  drawExtraPoints();
+});
+clearPointsButton.addEventListener("click", clearExtraPoints);
+window.addEventListener("resize", drawExtraPoints);
 
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
@@ -186,6 +250,7 @@ form.addEventListener("submit", async (event) => {
   data.append("mode", mode.value.replace("-", "_"));
   data.append("enhancement_level", document.querySelector("#enhancement-level").value);
   if (mode.value === "clean-enhance") data.append("cleanup_level", cleanupLevel.value);
+  if (mode.value === "clean-enhance") data.append("extra_points", JSON.stringify(extraPoints));
 
   processButton.disabled = true;
   status.textContent = "Processing...";
@@ -199,6 +264,7 @@ form.addEventListener("submit", async (event) => {
     if (mode.value === "clean-enhance") {
       const data = await response.json();
       showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
+      drawExtraPoints();
       showCleanedResult(data.cleaned_image);
       const enhancedBytes = Uint8Array.from(atob(data.enhanced_image), (character) => character.charCodeAt(0));
       showImageResult(
@@ -207,6 +273,7 @@ form.addEventListener("submit", async (event) => {
         "Final enhanced image",
       );
       status.textContent = `${data.message} (${data.enhanced_width} × ${data.enhanced_height})`;
+      if (data.extra_points?.length) status.textContent += " Selected UI points are ready for segmentation.";
     } else if (response.headers.get("content-type")?.startsWith("image/")) {
       const output = await response.blob();
       showImageResult(output, "enhanced-image.png", "Enhanced image");
@@ -224,6 +291,7 @@ form.addEventListener("submit", async (event) => {
 
 document.querySelector("#reset").addEventListener("click", () => {
   form.reset();
+  clearExtraPoints();
   clearPreview();
   clearTextRegions();
   clearResult();
