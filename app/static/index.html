@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Enhancer</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <main class="panel">
+    <h1>Image Enhancer</h1>
+    <form id="process-form">
+      <label for="image">Image (JPG, PNG, WebP; up to 20 MB)</label>
+      <input id="image" name="image" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required>
+      <p id="upload-message" role="alert" aria-live="polite"></p>
+      <section id="preview" aria-label="Image preview" hidden>
+        <img id="preview-image" alt="Selected image preview">
+        <dl>
+          <dt>Filename</dt><dd id="image-name"></dd>
+          <dt>File size</dt><dd id="image-size"></dd>
+          <dt>Dimensions</dt><dd id="image-dimensions"></dd>
+        </dl>
+      </section>
+
+      <label for="mode">Mode</label>
+      <select id="mode" name="mode">
+        <option value="clean-enhance">Clean + Enhance</option>
+        <option value="enhance-only">Enhance Only</option>
+      </select>
+
+      <div id="cleanup-group">
+        <label for="cleanup-level">Cleanup level</label>
+        <select id="cleanup-level" name="cleanup_level">
+          <option value="1">1</option><option value="2">2</option><option value="3">3</option>
+        </select>
+      </div>
+
+      <label for="enhancement-level">Enhancement level</label>
+      <select id="enhancement-level" name="enhancement_level">
+        <option value="1">1</option><option value="2">2</option>
+        <option value="3">3</option><option value="4">4</option>
+      </select>
+
+      <button type="submit">Process</button>
+      <button id="reset" type="button">Reset</button>
+    </form>
+    <p id="status" role="status" aria-live="polite"></p>
+    <section id="result" aria-label="Enhanced image result" hidden>
+      <h2>Enhanced image</h2>
+      <img id="result-image" alt="Enhanced result">
+      <a id="download-result" download="enhanced-image.png">Download result</a>
+    </section>
+  </main>
+</body>
+</html>

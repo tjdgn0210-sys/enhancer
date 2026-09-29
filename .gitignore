@@ -38,3 +38,8 @@ dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Local Real-ESRGAN runtime and model files
+tools/realesrgan/*.exe
+tools/realesrgan/*.dll
+tools/realesrgan/models/
