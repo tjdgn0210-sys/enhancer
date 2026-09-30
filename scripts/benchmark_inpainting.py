@@ -152,6 +152,11 @@ def run_case(
 
 def print_summary(rows: list[dict[str, int | float | str]]) -> None:
     headings = ("Case", "Dimensions", "Mask %", "LaMa s", "Telea s", "NS s")
+    if not rows:
+        print("\nBenchmark summary")
+        print(" | ".join(headings))
+        print("No valid cases to summarize.")
+        return
     formatted_rows = [
         (
             str(row["case_name"]),
