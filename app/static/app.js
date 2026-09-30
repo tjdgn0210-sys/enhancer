@@ -19,6 +19,7 @@ const resultHeading = result.querySelector("h2");
 const textOverlay = document.querySelector("#text-overlay");
 const segmentationOverlay = document.querySelector("#segmentation-overlay");
 const segmentationWarning = document.querySelector("#segmentation-warning");
+const removalMaskLabel = document.querySelector("#removal-mask-label");
 const textCount = document.querySelector("#text-count");
 const textList = document.querySelector("#text-list");
 const selectExtraPoints = document.querySelector("#select-extra-points");
@@ -71,6 +72,7 @@ function clearTextRegions() {
   textCount.hidden = true;
   textList.replaceChildren();
   textList.hidden = true;
+  removalMaskLabel.hidden = true;
 }
 
 function clearSegmentationPreview() {
@@ -114,9 +116,9 @@ function showSegmentationPreview(data, width, height) {
 
   const rejectedCount = data.segmentation_points.filter((point) => !point.accepted).length;
   if (data.segmentation_mask_safe === false) {
-    segmentationWarning.textContent = "Combined selection is too large and marked unsafe.";
+    segmentationWarning.textContent = "Combined selection is too large and was excluded from removal.";
   } else if (rejectedCount) {
-    segmentationWarning.textContent = "Selection was too large. Click directly on the UI element.";
+    segmentationWarning.textContent = "Some selections were too large and excluded. Click directly on the UI element.";
   } else {
     const area = (data.segmentation_area_ratio * 100).toFixed(1);
     segmentationWarning.textContent = `UI selection mask: ${area}% of image.`;
@@ -154,9 +156,10 @@ function clearExtraPoints() {
   drawExtraPoints();
 }
 
-function showTextRegions(regions, width, height, maskPreview) {
+function showTextRegions(regions, width, height, maskPreview, hasRemovalMask) {
   clearTextRegions();
   textOverlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  removalMaskLabel.hidden = !hasRemovalMask;
   if (maskPreview) {
     const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
     const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
@@ -318,7 +321,13 @@ form.addEventListener("submit", async (event) => {
     }
     if (mode.value === "clean-enhance") {
       const data = await response.json();
-      showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
+      showTextRegions(
+        data.text_regions || [],
+        data.width,
+        data.height,
+        data.combined_removal_mask,
+        data.combined_removal_area_ratio > 0,
+      );
       showSegmentationPreview(data, data.width, data.height);
       drawExtraPoints();
       showCleanedResult(data.cleaned_image);
