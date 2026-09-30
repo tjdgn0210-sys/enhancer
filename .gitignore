@@ -27,6 +27,7 @@ uploads/
 upload/
 outputs/
 output/
+benchmark_cases/
 benchmark_outputs/
 
 # Node dependencies and build artifacts
