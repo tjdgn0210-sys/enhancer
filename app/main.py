@@ -9,7 +9,7 @@ import logging
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
-from PIL import Image, ImageChops, ImageOps, UnidentifiedImageError
+from PIL import Image, ImageChops, ImageFilter, ImageOps, UnidentifiedImageError
 from pydantic import BaseModel, Field
 from app.services.enhancer import EnhancementError, enhance_image
 from app.services.inpainter import InpainterError, inpaint_image
@@ -20,10 +20,19 @@ from app.services.segmenter import SegmenterError, segment_points
 BASE_DIR = Path(__file__).resolve().parent
 MAX_FILE_SIZE = 20 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/png", "image/webp"}
+UI_MASK_EXPANSION = {1: (0.004, 2, 4), 2: (0.008, 4, 6), 3: (0.012, 6, 8)}
 
 app = FastAPI(title="Enhancer")
 logger = logging.getLogger(__name__)
 app.mount("/static", StaticFiles(directory=BASE_DIR / "static"), name="static")
+
+
+def expand_ui_inpainting_mask(mask: Image.Image, cleanup_level: int) -> Image.Image:
+    ratio, minimum, maximum = UI_MASK_EXPANSION[cleanup_level]
+    radius = max(minimum, min(maximum, round(max(mask.size) * ratio)))
+    if radius and mask.getbbox():
+        return mask.filter(ImageFilter.MaxFilter(radius * 2 + 1))
+    return mask
 
 
 @app.get("/health")
@@ -151,8 +160,9 @@ async def validate_process_request(
         if any(not point["accepted"] for point in segmentation["points"]):
             warnings.append("One or more UI selections were excluded because their masks exceeded 40% of the image.")
 
+        ui_inpainting_mask = expand_ui_inpainting_mask(accepted_segmentation_mask, cleanup_level)
         with Image.open(BytesIO(mask_png)) as ocr_mask:
-            final_removal_mask = ImageChops.lighter(ocr_mask.convert("L"), accepted_segmentation_mask)
+            final_removal_mask = ImageChops.lighter(ocr_mask.convert("L"), ui_inpainting_mask)
         combined_pixels = sum(final_removal_mask.histogram()[1:])
         combined_removal_area_ratio = combined_pixels / (width * height)
         combined_mask_png = BytesIO()
