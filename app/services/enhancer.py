@@ -15,7 +15,7 @@ TIMEOUT_SECONDS = 180
 
 # realesrgan-x4plus preserves composition at its native 4x output. Smaller
 # levels are produced by downsampling that full-frame result with Pillow.
-LEVEL_SCALES = {1: 2, 2: 3, 3: 4, 4: 4}
+LEVEL_SCALES = {1: 2, 2: 3, 3: 4}
 
 
 class EnhancementError(Exception):

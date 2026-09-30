@@ -84,8 +84,8 @@ async def validate_process_request(
         raise HTTPException(status_code=422, detail="Invalid processing mode.")
     if mode == "clean_enhance" and cleanup_level not in {1, 2, 3}:
         raise HTTPException(status_code=422, detail="Cleanup level must be 1, 2, or 3.")
-    if enhancement_level not in {1, 2, 3, 4}:
-        raise HTTPException(status_code=422, detail="Enhancement level must be 1, 2, 3, or 4.")
+    if enhancement_level not in {1, 2, 3}:
+        raise HTTPException(status_code=422, detail="Enhancement level must be 1, 2, or 3.")
 
     contents = await image.read(MAX_FILE_SIZE + 1)
     if not contents:
