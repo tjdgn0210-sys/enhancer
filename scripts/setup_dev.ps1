@@ -94,6 +94,50 @@ if (Test-UsableFile $lamaModelPath) {
     }
 }
 
+$edgeSamRevision = "5d010ec34cef497a7205e375222647e2d2f57091"
+$segmentationModels = @(
+    @{
+        Name = "edge_sam_3x_encoder.onnx"
+        Sha256 = "719a498cf5b3fe9be9f01ee513e13d3915f9028aa4f23dfd30eaaa0a17143159"
+        Url = "https://huggingface.co/spaces/chongzhou/EdgeSAM/resolve/$edgeSamRevision/weights/edge_sam_3x_encoder.onnx?download=true"
+    },
+    @{
+        Name = "edge_sam_3x_decoder.onnx"
+        Sha256 = "83a2174d54571596913dcb7455d021e713623c3dca30a31c8c41ab98c9fb0863"
+        Url = "https://huggingface.co/spaces/chongzhou/EdgeSAM/resolve/$edgeSamRevision/weights/edge_sam_3x_decoder.onnx?download=true"
+    }
+)
+$missingSegmentationModels = @($segmentationModels | Where-Object {
+    -not (Test-UsableFile (Join-Path $segmentationDir $_.Name))
+})
+
+if ($missingSegmentationModels.Count -gt 0) {
+    $temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("edgesam-setup-" + [guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Path $temporaryRoot | Out-Null
+    try {
+        foreach ($model in $missingSegmentationModels) {
+            $temporaryModelPath = Join-Path $temporaryRoot $model.Name
+            $destination = Join-Path $segmentationDir $model.Name
+            Write-Host "Downloading EdgeSAM model $($model.Name)..."
+            Invoke-WebRequest -Uri $model.Url -OutFile $temporaryModelPath -UseBasicParsing
+            if (-not (Test-UsableFile $temporaryModelPath)) {
+                throw "Downloaded EdgeSAM model '$($model.Name)' is missing or empty."
+            }
+            $actualHash = (Get-FileHash -LiteralPath $temporaryModelPath -Algorithm SHA256).Hash
+            if ($actualHash -ne $model.Sha256) {
+                throw "Downloaded EdgeSAM model '$($model.Name)' failed its SHA256 check."
+            }
+            Move-Item -LiteralPath $temporaryModelPath -Destination $destination -Force
+        }
+    } catch {
+        throw "Could not restore EdgeSAM ONNX models: $($_.Exception.Message)"
+    } finally {
+        Remove-Item -LiteralPath $temporaryRoot -Recurse -Force -ErrorAction SilentlyContinue
+    }
+} else {
+    Write-Host "EdgeSAM ONNX models are already present; skipping download."
+}
+
 Write-Host "Development runtime setup complete."
 Write-Host "Next, create the Python environment and install dependencies:"
 Write-Host "  python -m venv .venv"

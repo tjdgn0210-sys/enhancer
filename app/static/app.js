@@ -17,6 +17,8 @@ const resultImage = document.querySelector("#result-image");
 const downloadResult = document.querySelector("#download-result");
 const resultHeading = result.querySelector("h2");
 const textOverlay = document.querySelector("#text-overlay");
+const segmentationOverlay = document.querySelector("#segmentation-overlay");
+const segmentationWarning = document.querySelector("#segmentation-warning");
 const textCount = document.querySelector("#text-count");
 const textList = document.querySelector("#text-list");
 const selectExtraPoints = document.querySelector("#select-extra-points");
@@ -69,6 +71,57 @@ function clearTextRegions() {
   textCount.hidden = true;
   textList.replaceChildren();
   textList.hidden = true;
+}
+
+function clearSegmentationPreview() {
+  segmentationOverlay.replaceChildren();
+  segmentationOverlay.removeAttribute("viewBox");
+  segmentationWarning.textContent = "";
+  segmentationWarning.hidden = true;
+}
+
+function showSegmentationPreview(data, width, height) {
+  clearSegmentationPreview();
+  if (!data.segmentation_points?.length) return;
+
+  segmentationOverlay.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  if (data.segmentation_mask) {
+    const defs = document.createElementNS("http://www.w3.org/2000/svg", "defs");
+    const mask = document.createElementNS("http://www.w3.org/2000/svg", "mask");
+    mask.id = "segmentation-mask";
+    mask.setAttribute("maskUnits", "userSpaceOnUse");
+    mask.setAttribute("maskContentUnits", "userSpaceOnUse");
+    mask.setAttribute("mask-type", "luminance");
+    mask.setAttribute("width", width);
+    mask.setAttribute("height", height);
+    const maskImage = document.createElementNS("http://www.w3.org/2000/svg", "image");
+    maskImage.setAttribute("href", `data:image/png;base64,${data.segmentation_mask}`);
+    maskImage.setAttribute("width", width);
+    maskImage.setAttribute("height", height);
+    maskImage.setAttribute("preserveAspectRatio", "none");
+    mask.append(maskImage);
+    defs.append(mask);
+    segmentationOverlay.append(defs);
+
+    const highlightedMask = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+    highlightedMask.setAttribute("width", width);
+    highlightedMask.setAttribute("height", height);
+    highlightedMask.setAttribute("fill", "#2563eb");
+    highlightedMask.setAttribute("fill-opacity", "0.38");
+    highlightedMask.setAttribute("mask", "url(#segmentation-mask)");
+    segmentationOverlay.append(highlightedMask);
+  }
+
+  const rejectedCount = data.segmentation_points.filter((point) => !point.accepted).length;
+  if (data.segmentation_mask_safe === false) {
+    segmentationWarning.textContent = "Combined selection is too large and marked unsafe.";
+  } else if (rejectedCount) {
+    segmentationWarning.textContent = "Selection was too large. Click directly on the UI element.";
+  } else {
+    const area = (data.segmentation_area_ratio * 100).toFixed(1);
+    segmentationWarning.textContent = `UI selection mask: ${area}% of image.`;
+  }
+  segmentationWarning.hidden = false;
 }
 
 function drawExtraPoints() {
@@ -161,6 +214,7 @@ function clearPreview() {
 imageInput.addEventListener("change", () => {
   clearPreview();
   clearTextRegions();
+  clearSegmentationPreview();
   uploadMessage.textContent = "";
   status.textContent = "";
   const image = imageInput.files[0];
@@ -245,6 +299,7 @@ form.addEventListener("submit", async (event) => {
   const processButton = form.querySelector('button[type="submit"]');
   clearResult();
   clearTextRegions();
+  clearSegmentationPreview();
   const data = new FormData();
   data.append("image", image);
   data.append("mode", mode.value.replace("-", "_"));
@@ -264,6 +319,7 @@ form.addEventListener("submit", async (event) => {
     if (mode.value === "clean-enhance") {
       const data = await response.json();
       showTextRegions(data.text_regions || [], data.width, data.height, data.mask_preview);
+      showSegmentationPreview(data, data.width, data.height);
       drawExtraPoints();
       showCleanedResult(data.cleaned_image);
       const enhancedBytes = Uint8Array.from(atob(data.enhanced_image), (character) => character.charCodeAt(0));
@@ -290,10 +346,11 @@ form.addEventListener("submit", async (event) => {
 });
 
 document.querySelector("#reset").addEventListener("click", () => {
-  form.reset();
+  HTMLFormElement.prototype.reset.call(form);
   clearExtraPoints();
   clearPreview();
   clearTextRegions();
+  clearSegmentationPreview();
   clearResult();
   uploadMessage.textContent = "";
   status.textContent = "";

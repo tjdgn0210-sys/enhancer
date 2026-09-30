@@ -17,8 +17,10 @@
       <section id="preview" aria-label="Image preview" hidden>
         <div class="preview-stage">
           <img id="preview-image" alt="Selected image preview">
+          <svg id="segmentation-overlay" aria-hidden="true" preserveAspectRatio="none"></svg>
           <svg id="text-overlay" aria-hidden="true" preserveAspectRatio="none"></svg>
         </div>
+        <p id="segmentation-warning" role="status" aria-live="polite" hidden></p>
         <p id="text-count" hidden></p>
         <ul id="text-list" hidden></ul>
         <dl>

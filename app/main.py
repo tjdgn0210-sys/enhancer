@@ -14,6 +14,7 @@ from pydantic import BaseModel
 from app.services.enhancer import EnhancementError, enhance_image
 from app.services.inpainter import InpainterError, inpaint_image
 from app.services.ocr import OcrEngineError, detect_text_regions, generate_removal_mask
+from app.services.segmenter import SegmenterError, segment_points
 
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -60,6 +61,10 @@ class ProcessResponse(BaseModel):
     enhanced_width: int | None = None
     enhanced_height: int | None = None
     extra_points: list[dict[str, int]] | None = None
+    segmentation_points: list[dict] | None = None
+    segmentation_mask: str | None = None
+    segmentation_area_ratio: float | None = None
+    segmentation_mask_safe: bool | None = None
 
 
 @app.post("/api/process", response_model=None)
@@ -121,6 +126,11 @@ async def validate_process_request(
 
     if mode == "clean_enhance":
         try:
+            segmentation = segment_points(contents, validated_points)
+        except SegmenterError as error:
+            logger.error("EdgeSAM request failed: %s", error)
+            raise HTTPException(status_code=503, detail=str(error)) from None
+        try:
             text_regions = detect_text_regions(contents, cleanup_level)
             mask_png = generate_removal_mask(width, height, text_regions, cleanup_level)
         except OcrEngineError as error:
@@ -167,6 +177,10 @@ async def validate_process_request(
             enhanced_width=enhanced_width,
             enhanced_height=enhanced_height,
             extra_points=validated_points,
+            segmentation_points=segmentation["points"],
+            segmentation_mask=base64.b64encode(segmentation["mask"]).decode("ascii"),
+            segmentation_area_ratio=segmentation["area_ratio"],
+            segmentation_mask_safe=segmentation["safe"],
         )
 
     try:
