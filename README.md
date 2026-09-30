@@ -1,5 +1,18 @@
 # Enhancer
 
+## Windows development setup
+
+On a fresh PC, clone the repository, restore the local AI runtime/model files, then install and run the app:
+
+```powershell
+git clone https://github.com/tjdgn0210-sys/enhancer.git
+cd enhancer
+powershell -ExecutionPolicy Bypass -File .\scripts\setup_dev.ps1
+python -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```
+
 ## Run locally
 
 ```powershell
